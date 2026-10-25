@@ -22,3 +22,8 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Local archives
+/frontend.zip
+/node_modules.zip
+
