@@ -1,4 +1,9 @@
+
+
+import { signIn, signUp } from "./services/auth";
+import { supabase } from './lib/supabase'
 import { useEffect, useMemo, useState } from "react";
+import { trackEngagement } from "./services/engagement";
 
 import {
   Activity,
@@ -42,7 +47,8 @@ const initialProducts = [
     interest: 284,
     status: "Available",
     tag: "Fan favourite",
-    image: "/images/sakura-spirit-collectible.png",
+    image:
+      "https://images.unsplash.com/photo-1578632767115-351597cf2477?auto=format&fit=crop&w=800&q=85",
     description:
       "A limited-edition collectible inspired by Japanese pop culture.",
   },
@@ -54,7 +60,8 @@ const initialProducts = [
     interest: 196,
     status: "Available",
     tag: "Trending",
-    image: "/images/neo-tokyo-dark-tee.png",
+    image:
+      "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=800&q=85",
     description: "Tokyo-inspired streetwear made for everyday fandom.",
   },
   {
@@ -65,7 +72,8 @@ const initialProducts = [
     interest: 352,
     status: "Available",
     tag: "High demand",
-    image: "/images/neo-tokyo-dark-tee.png",
+    image:
+      "https://images.unsplash.com/photo-1544947950-fa07a98d237f?auto=format&fit=crop&w=800&q=85",
     description: "A curated box for readers discovering manga.",
   },
   {
@@ -76,7 +84,8 @@ const initialProducts = [
     interest: 94,
     status: "Coming soon",
     tag: "New",
-    image: "/images/akiba-gaming-desk-mat.png",
+    image:
+      "https://images.unsplash.com/photo-1593305841991-05c297ba4575?auto=format&fit=crop&w=800&q=85",
     description: "Give your gaming setup a colourful upgrade.",
   },
 ];
@@ -114,13 +123,12 @@ const navItems = [
   { label: "Products", icon: Package },
   { label: "Events", icon: CalendarDays },
   { label: "Audience", icon: Users },
+  { label: "Customer Feedback", icon: MessageSquareText },
+  { label: "Order Tracking", icon: Truck },
   { label: "Demand Predictor", icon: BrainCircuit },
   { label: "City Demand", icon: MapPinned },
   { label: "Campaigns", icon: Zap },
-  { label: "My Interests", icon: Heart },
   { label: "My orders", icon: ShoppingBag },
-  { label: "Order Tracking", icon: Truck },
-  { label: "Customer Feedback", icon: MessageSquareText },
   { label: "Settings", icon: Settings },
 ];
 
@@ -139,43 +147,7 @@ function loadSaved(key, fallback) {
     return fallback;
   }
 }
-const interestOptions = [
-  "Anime",
-  "Manga",
-  "Gaming",
-  "Streetwear",
-  "Collectibles",
-  "Cosplay",
-  "Japanese Music",
-  "Community Events",
-];
 
-function matchesFanPreferences(item) {
-  const selected = preferences.interests;
-
-  // Show everything until the fan selects interests.
-  if (!selected || selected.length === 0) return true;
-
-  const itemText =
-    `${item.name || ""} ${item.category || ""} ${item.description || ""}`.toLowerCase();
-
-  const interestKeywords = {
-    Anime: ["anime", "japanese pop culture"],
-    Manga: ["manga"],
-    Gaming: ["gaming", "game"],
-    Streetwear: ["streetwear", "apparel", "tee"],
-    Collectibles: ["collectible", "collectibles"],
-    Cosplay: ["cosplay"],
-    "Japanese Music": ["music", "tokyo nights"],
-    "Community Events": ["community", "meetup", "carnival"],
-  };
-
-  return selected.some((interest) => {
-    const keywords = interestKeywords[interest] || [interest.toLowerCase()];
-
-    return keywords.some((keyword) => itemText.includes(keyword));
-  });
-}
 function Brand() {
   return (
     <div className="brand">
@@ -287,10 +259,11 @@ function KizunaAuth({ onLogin }) {
     setError("");
   }
 
-  function handleSubmit(event) {
-    event.preventDefault();
-    setError("");
+ async function handleSubmit(event) {
+  event.preventDefault();
+  setError("");
 
+  try {
     if (mode === "register") {
       if (password.length < 8) {
         setError("Password must contain at least 8 characters.");
@@ -302,20 +275,38 @@ function KizunaAuth({ onLogin }) {
         return;
       }
 
+      await signUp({
+        email,
+        password,
+        fullName: name,
+        organization,
+        portal,
+      });
+
       setError(
-        "Registration is currently a demo. Connect a backend to create accounts.",
+        "Account created successfully. Please check your email to confirm your account."
       );
+
+      setMode("login");
       return;
     }
 
-    if (!email.trim() || !password) {
-      setError("Please enter your email and password.");
-      return;
-    }
+    const data = await signIn(email, password);
 
-    // Demo-only login. This does not verify credentials.
-    onLogin(portal);
+    if (data?.user) {
+      onLogin(data.user, portal);
+    }
+  } catch (err) {
+    console.error("Authentication error:", err);
+    setError(err.message || "Authentication failed.");
   }
+}
+
+      
+
+      
+
+    
 
   return (
     <div className="kz-auth">
@@ -541,12 +532,27 @@ function KizunaAuth({ onLogin }) {
     </div>
   );
 }
-export default function App() {
+export default function App()
+{
+  console.log("Supabase client:", supabase);
+  useEffect(() => {
+  async function testSupabase() {
+    const { data, error } = await supabase
+      .from("kizuna_test")
+      .select("*");
+
+    console.log("KIZUNA database test:", data);
+    console.log("KIZUNA database error:", error);
+  }
+
+  testSupabase();
+}, []);
+
   const [isAuthenticated, setIsAuthenticated] = useState(
-    () => sessionStorage.getItem("kizuna_demo_authenticated") === "true",
+    () => sessionStorage.getItem("kizuna_demo_authenticated") === "true"
   );
   const [role, setRole] = useState(() => loadSaved("kizuna_role", "company"));
-  const [page, setPage] = useState(() => loadSaved("kizuna_page", "Overview"));
+  const [page, setPage] = useState("Overview");
   const [mobileMenu, setMobileMenu] = useState(false);
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("All");
@@ -567,9 +573,6 @@ export default function App() {
   const [interests, setInterests] = useState(() =>
     loadSaved("kizuna_interests", []),
   );
-  const [preferences, setPreferences] = useState(() =>
-    loadSaved("kizuna_preferences", { interests: [] }),
-  );
 
   const [eventRegistrations, setEventRegistrations] = useState([]);
   const [showProductForm, setShowProductForm] = useState(false);
@@ -584,11 +587,7 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem("kizuna_role", JSON.stringify(role));
   }, [role]);
-  useEffect(() => {
-    if (isAuthenticated) {
-      localStorage.setItem("kizuna_page", JSON.stringify(page));
-    }
-  }, [page, isAuthenticated]);
+
   useEffect(() => {
     localStorage.setItem("kizuna_products", JSON.stringify(products));
   }, [products]);
@@ -600,9 +599,7 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem("kizuna_orders", JSON.stringify(orders));
   }, [orders]);
-  useEffect(() => {
-    localStorage.setItem("kizuna_preferences", JSON.stringify(preferences));
-  }, [preferences]);
+
   useEffect(() => {
     localStorage.setItem("kizuna_interests", JSON.stringify(interests));
   }, [interests]);
@@ -617,32 +614,7 @@ export default function App() {
 
   const notify = (message) => setToast(message);
   const isCompany = role === "company";
-  function matchesFanPreferences(item) {
-    const selected = preferences.interests;
 
-    // Show everything until the fan selects interests.
-    if (!selected || selected.length === 0) return true;
-
-    const itemText =
-      `${item.name || ""} ${item.category || ""} ${item.description || ""}`.toLowerCase();
-
-    const interestKeywords = {
-      Anime: ["anime", "japanese pop culture"],
-      Manga: ["manga"],
-      Gaming: ["gaming", "game"],
-      Streetwear: ["streetwear", "apparel", "tee"],
-      Collectibles: ["collectible", "collectibles"],
-      Cosplay: ["cosplay"],
-      "Japanese Music": ["music", "tokyo nights"],
-      "Community Events": ["community", "meetup", "carnival"],
-    };
-
-    return selected.some((interest) => {
-      const keywords = interestKeywords[interest] || [interest.toLowerCase()];
-
-      return keywords.some((keyword) => itemText.includes(keyword));
-    });
-  }
   const visibleProducts = useMemo(() => {
     return products.filter((product) => {
       const matchesSearch = `${product.name} ${product.category}`
@@ -653,11 +625,11 @@ export default function App() {
         category === "All" || product.category === category;
 
       const matchesPage =
-        (page !== "Favorites" || favorites.includes(product.id)) &&
-        (isCompany || matchesFanPreferences(product));
+        page !== "Favorites" || favorites.includes(product.id);
+
       return matchesSearch && matchesCategory && matchesPage;
     });
-  }, [products, search, category, page, favorites, isCompany, preferences]);
+  }, [products, search, category, page, favorites]);
 
   const totalInterest = products.reduce(
     (total, product) => total + Number(product.interest || 0),
@@ -669,50 +641,85 @@ export default function App() {
     0,
   );
 
-  function toggleFavorite(product) {
-    const alreadySaved = favorites.includes(product.id);
+  async function toggleFavorite(product) {
+  const alreadySaved = favorites.includes(product.id);
 
-    setFavorites((current) =>
-      alreadySaved
-        ? current.filter((id) => id !== product.id)
-        : [...current, product.id],
-    );
+  setFavorites((current) =>
+    alreadySaved
+      ? current.filter((id) => id !== product.id)
+      : [...current, product.id],
+  );
 
-    notify(alreadySaved ? "Removed from favorites" : "Added to favorites");
-  }
-
-  function registerInterest(product) {
-    if (interests.includes(product.id)) {
-      notify("You have already registered interest");
-      return;
-    }
-
-    setInterests((current) => [...current, product.id]);
-
-    setProducts((current) =>
-      current.map((item) =>
-        item.id === product.id
-          ? { ...item, interest: item.interest + 1 }
-          : item,
-      ),
-    );
-
-    notify("Your interest has been recorded");
-  }
-
-  function placeDemoOrder(product) {
-    const order = {
-      id: `KZ-${Date.now().toString().slice(-7)}`,
-      productId: product.id,
-      product: product.name,
+  await trackEngagement({
+    eventType: alreadySaved ? "favorite_removed" : "favorite_added",
+    entityType: "product",
+    entityId: String(product.id),
+    metadata: {
+      product_name: product.name,
+      category: product.category,
       price: product.price,
-      date: new Date().toISOString(),
-      status: "Demo order",
-    };
+    },
+  });
 
-    setOrders((current) => [order, ...current]);
-    notify("Demo order placed — no payment was charged");
+  notify(alreadySaved ? "Removed from favorites" : "Added to favorites");
+}
+
+  async function registerInterest(product) {
+  if (interests.includes(product.id)) {
+    notify("You have already registered interest");
+    return;
   }
+
+  setInterests((current) => [...current, product.id]);
+
+  setProducts((current) =>
+    current.map((item) =>
+      item.id === product.id
+        ? { ...item, interest: item.interest + 1 }
+        : item,
+    ),
+  );
+
+  await trackEngagement({
+    eventType: "interest_registered",
+    entityType: "product",
+    entityId: String(product.id),
+    metadata: {
+      product_name: product.name,
+      category: product.category,
+      price: product.price,
+    },
+  });
+
+  notify("Your interest has been recorded");
+}
+
+  async function placeDemoOrder(product) {
+  const order = {
+    id: `KZ-${Date.now().toString().slice(-7)}`,
+    productId: product.id,
+    product: product.name,
+    price: product.price,
+    date: new Date().toISOString(),
+    status: "Demo order",
+  };
+
+  setOrders((current) => [order, ...current]);
+
+  await trackEngagement({
+    eventType: "demo_order_placed",
+    entityType: "product",
+    entityId: String(product.id),
+    metadata: {
+      product_name: product.name,
+      category: product.category,
+      price: product.price,
+      order_status: "Demo order",
+    },
+  });
+
+  notify("Demo order placed — no payment was charged");
+}
 
   function addProduct(event) {
     event.preventDefault();
@@ -749,15 +756,27 @@ export default function App() {
     notify("Product added successfully");
   }
 
-  function registerEvent(event) {
-    if (eventRegistrations.includes(event.id)) {
-      notify("You have already registered for this event");
-      return;
-    }
-
-    setEventRegistrations((current) => [...current, event.id]);
-    notify(`Registered for ${event.name}`);
+  async function registerEvent(event) {
+  if (eventRegistrations.includes(event.id)) {
+    notify("You have already registered for this event");
+    return;
   }
+
+  setEventRegistrations((current) => [...current, event.id]);
+
+  await trackEngagement({
+    eventType: "event_registration",
+    entityType: "event",
+    entityId: String(event.id),
+    metadata: {
+      event_name: event.name,
+      location: event.location,
+      date: event.date,
+    },
+  });
+
+  notify(`Registered for ${event.name}`);
+}
 
   function handleLogout() {
     sessionStorage.removeItem("kizuna_demo_authenticated");
@@ -774,27 +793,12 @@ export default function App() {
     setSearch("");
     setCategory("All");
   }
-  function changePage(nextPage) {
-  setPage(nextPage);
-  setMobileMenu(false);
-  setSearch("");
-  setCategory("All");
-}
 
-// PASTE switchRole() HERE
-// function switchRole(nextRole) {
-//   setRole(nextRole);
-//   setPage(
-//     nextRole === "company"
-//       ? "Overview"
-//       : preferences.interests.length === 0
-//         ? "My Interests"
-//         : "Discover",
-//   );
-//   setMobileMenu(false);
-//   setSearch("");
-//   setCategory("All");
-// }
+  function switchRole(nextRole) {
+    setRole(nextRole);
+    setPage(nextRole === "company" ? "Overview" : "Discover");
+    setMobileMenu(false);
+  }
 
   const pageTitle =
     page === "Overview"
@@ -812,13 +816,7 @@ export default function App() {
           localStorage.setItem("kizuna_role", JSON.stringify(nextRole));
 
           setRole(nextRole);
-          setPage(
-            nextRole === "company"
-              ? "Overview"
-              : preferences.interests.length === 0
-                ? "My Interests"
-                : "Discover",
-          );
+          setPage(nextRole === "company" ? "Overview" : "Discover");
           setIsAuthenticated(true);
         }}
       />
@@ -854,7 +852,7 @@ export default function App() {
 
         <div className="workspace-label">WORKSPACE</div>
 
-        {/* <div className="role-switcher">
+        <div className="role-switcher">
           <button
             className={isCompany ? "role-active" : ""}
             onClick={() => switchRole("company")}
@@ -870,7 +868,7 @@ export default function App() {
             <Heart size={16} />
             Fan portal
           </button>
-        </div> */}
+        </div>
 
         <div className="workspace-label nav-heading">MENU</div>
 
@@ -878,9 +876,7 @@ export default function App() {
           {navItems
             .filter((item) => {
               if (isCompany) {
-                return !["Discover", "My orders", "My Interests"].includes(
-                  item.label,
-                );
+                return !["Discover", "My orders"].includes(item.label);
               }
 
               return ![
@@ -974,10 +970,7 @@ export default function App() {
             <button
               className="avatar top-avatar"
               title="Switch portal"
-              onClick={() => {
-                sessionStorage.removeItem("kizuna_demo_authenticated");
-                setIsAuthenticated(false);
-              }}
+              onClick={() => switchRole(isCompany ? "fan" : "company")}
             >
               {isCompany ? "K" : "F"}
             </button>
@@ -1436,10 +1429,7 @@ export default function App() {
               </section>
 
               <div className="events-grid">
-                {(isCompany
-                  ? events
-                  : events.filter((event) => matchesFanPreferences(event))
-                ).map((event, index) => {
+                {events.map((event, index) => {
                   const registered = eventRegistrations.includes(event.id);
 
                   return (
@@ -1484,55 +1474,6 @@ export default function App() {
                 })}
               </div>
             </>
-          )}
-          {page === "My Interests" && !isCompany && (
-            <section className="page-intro">
-              <div>
-                <span className="eyebrow">PERSONALISE YOUR EXPERIENCE</span>
-                <h2>What are you a fan of?</h2>
-                <p>
-                  Choose your interests to see products and events relevant to
-                  you.
-                </p>
-
-                <div className="interest-options">
-                  {interestOptions.map((interest) => {
-                    const selected = preferences.interests.includes(interest);
-
-                    return (
-                      <button
-                        key={interest}
-                        type="button"
-                        className={`interest-option ${selected ? "selected" : ""}`}
-                        onClick={() =>
-                          setPreferences((current) => ({
-                            ...current,
-                            interests: selected
-                              ? current.interests.filter(
-                                  (item) => item !== interest,
-                                )
-                              : [...current.interests, interest],
-                          }))
-                        }
-                      >
-                        {selected ? "✓ " : "+ "}
-                        {interest}
-                      </button>
-                    );
-                  })}
-                </div>
-
-                <Button
-                  variant="primary"
-                  onClick={() => {
-                    changePage("Discover");
-                    notify("Your interests have been saved");
-                  }}
-                >
-                  Save interests and explore <ArrowRight size={16} />
-                </Button>
-              </div>
-            </section>
           )}
 
           {page === "Audience" && isCompany && (
@@ -1936,7 +1877,6 @@ export default function App() {
                     setFavorites([]);
                     setOrders([]);
                     setInterests([]);
-                    setPreferences({ interests: [] });
                     setEventRegistrations([]);
 
                     Object.keys(localStorage)
@@ -1944,9 +1884,7 @@ export default function App() {
                       .forEach((key) => localStorage.removeItem(key));
 
                     notify("Demo data has been reset");
-                    
                   }}
-                  
                 >
                   Reset local demo data
                 </Button>
